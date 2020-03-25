@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1582351193 source:c:\users\bouru\documents\lfa\proiect1\main.cpp
+	<iostream>
+	<fstream>
+	<vector>
+	<cstring>
+
