@@ -1,4 +1,4 @@
-# Proiectul 1: Lambda-NFA to minimal DFA
+# Proiectul 2: Lambda-NFA to minimal DFA
 
 Se da un Lambda-NFA. Transformați NFA-ul într-un DFA minimal. Proces în 3 pași:
 * Lambda-NFA to NFA
