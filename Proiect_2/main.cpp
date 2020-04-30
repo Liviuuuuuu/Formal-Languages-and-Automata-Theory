@@ -47,7 +47,7 @@ public:
     friend istream& operator>>(istream&, NFA&);
     friend ostream& operator<<(ostream&, const NFA&);
 };
-istream& operator>>(istream& in, NFA& a)
+istream& operator >>(istream& in, NFA& a)
 {
     int aux;
     in >> a.nrStari >> aux;
@@ -69,7 +69,7 @@ istream& operator>>(istream& in, NFA& a)
     }
     return in;
 }
-ostream& operator<<(ostream& out, const NFA& a)
+ostream& operator <<(ostream& out, const NFA& a)
 {
     out << a.nrStari << " stari\n";
     out << "Starea initiala: " << a.si << '\n';
@@ -89,6 +89,75 @@ class DFA
     int nrStari, si;
     vector <map <char, int> > tranzitii;
     vector <bool> f;
+
+    void removeStates(vector <bool> &unreachable)
+    {
+        // starile in care nu putem ajunge
+        int nod;
+        queue <int> Q;
+        vector <bool> viz(nrStari+1, 0);
+        Q.push(si);
+        viz[si] = 1;
+        while(!Q.empty())
+        {
+            nod = Q.front();
+            Q.pop();
+            for(auto it : tranzitii[nod])
+                if(!viz[it.second])
+                {
+                    viz[it.second] = 1;
+                    Q.push(it.second);
+                }
+        }
+        int out = 0;
+        for(int i = 1; i <= nrStari; ++i)
+            if(!viz[i])
+            {
+                unreachable[i] = 1;
+                out++;
+            }
+        nrStari -= out;
+
+
+        // stari din care nu ajungem intr-o stare finala
+        viz.clear();
+        viz.resize(nrStari+1, 0);
+        vector <vector <int> > inv(nrStari+1);
+        for(int i = 1; i <= nrStari; ++i)
+            for(auto it : tranzitii[i]) inv[it.second].push_back(i);
+
+        for(int i = 1; i <= nrStari; ++i)
+            if(f[i])
+            {
+                Q.push(i);
+                viz[i] = 1;
+            }
+        while(!Q.empty())
+        {
+            nod = Q.front();
+            Q.pop();
+            for(auto it : inv[nod])
+                if(!viz[it])
+                {
+                    viz[it] = 1;
+                    Q.push(it);
+                }
+        }
+        out = 0;
+        for(int i = 1; i <= nrStari; ++i)
+            if(!viz[i])
+            {
+                unreachable[i] = 1;
+                out++;
+            }
+        nrStari -= out;
+    }
+    int equiv(int x, vector <vector <int> > sets)
+    {
+        for(int i = 0; i < sets.size(); ++i)
+            for(int j = 0; j < sets[i].size(); ++j)
+                if(sets[i][j] == x) return i;
+    }
 public:
     DFA(const NFA& anfa)
     {
@@ -104,6 +173,7 @@ public:
         aux.insert(si);
         f.push_back(nfaF[si]);
         myMap[aux] = ++nrStari;
+        tranzitii.push_back(map <char, int>());
         tranzitii.push_back(map <char, int>());
 
         Q.push(aux);
@@ -135,9 +205,103 @@ public:
             }
         }
     }
-    friend ostream& operator<<(ostream&, const DFA&);
+    void minimisation()
+    {
+        vector <bool> unreachable(nrStari+1, 0);
+        removeStates(unreachable);
+
+        vector <int> aux1[2];
+        for(int i = 1; i <= nrStari; ++i)
+            if(!unreachable[i]) aux1[f[i]].push_back(i);
+        vector <vector <int> > sets[2];
+        sets[0].push_back(aux1[0]); sets[0].push_back(aux1[1]);
+
+        sets[1] = sets[0];
+        do
+        {
+            sets[0] = sets[1];
+
+            for(int i = 0; i < sets[1].size(); ++i)
+                for(int j = 1; j < sets[1][i].size(); ++j)
+                {
+                    bool ePusOK = 0;
+                    for(int k = 0; k < j; ++k)
+                    {
+                        bool echiv = 1;
+                        for(char c : alf)
+                            if(tranzitii[sets[1][i][j]].count(c) && tranzitii[sets[1][i][k]].count(c) && !unreachable[tranzitii[sets[1][i][j]][c]] && !unreachable[tranzitii[sets[1][i][k]][c]])
+                                if(equiv(tranzitii[sets[1][i][j]][c], sets[0]) != equiv(tranzitii[sets[1][i][k]][c], sets[0]))
+                                {
+                                    echiv = 0;
+                                    break;
+                                }
+                        if(echiv)
+                        {
+                            ePusOK = 1;
+                            break;
+                        }
+                    }
+                    if(ePusOK) continue;
+
+                    for(int I = sets[0].size(); I < sets[1].size() && !ePusOK; ++I)
+                        for(int J = 0; J < sets[1][I].size(); ++J)
+                        {
+                            bool echiv = 1;
+                            for(char c : alf)
+                                if(tranzitii[sets[1][i][j]].count(c) && tranzitii[sets[1][I][J]].count(c) && !unreachable[tranzitii[sets[1][i][j]][c]] && !unreachable[tranzitii[sets[1][I][J]][c]])
+                                    if(equiv(tranzitii[sets[1][i][j]][c], sets[0]) != equiv(tranzitii[sets[1][I][J]][c], sets[0]))
+                                    {
+                                        echiv = 0;
+                                        break;
+                                    }
+                            if(echiv)
+                            {
+                                sets[1][I].push_back(sets[1][i][j]);
+                                sets[1][i].erase(sets[1][i].begin()+j);
+                                ePusOK = 1;
+                                break;
+                            }
+                        }
+                    if(ePusOK) continue;
+                    sets[1].push_back(vector <int> ({sets[1][i][j]}));
+                    sets[1][i].erase(sets[1][i].begin()+j);
+                }
+        } while(sets[0] != sets[1]);
+
+        vector <int> newNodes(nrStari+1, 0);
+        int n = 0;
+        for(int i = 0; i < sets[1].size(); ++i)
+        {
+            n++;
+            for(int j = 0; j < sets[1][i].size(); ++j) newNodes[sets[1][i][j]] = n;
+        }
+        vector <map <char, int> > newTranz(n+1, map <char, int>());
+        for(int i = 0; i < sets[1].size(); ++i)
+        {
+            int first = sets[1][i][0];
+            for(char c : alf)
+                if(tranzitii[first].count(c) && !unreachable[tranzitii[first][c]]) newTranz[newNodes[first]][c] = newNodes[ tranzitii[first][c] ];
+        }
+        vector <bool> newF(n+1, 0);
+        for(int i = 0; i < sets[1].size(); ++i)
+            if(f[ sets[1][i][0] ]) newF[newNodes[sets[1][i][0]]] = 1;
+
+
+        for(int i = 0; i < sets[1].size(); ++i)
+        {
+            cout << "{ ";
+            for(int j = 0; j < sets[1][i].size(); ++j)
+                cout << sets[1][i][j] << " ";
+            cout << "}\n";
+        }
+        si = newNodes[equiv(si, sets[1])+1];
+        nrStari = n;
+        f = newF;
+        tranzitii = newTranz;
+    }
+    friend ostream& operator <<(ostream&, const DFA&);
 };
-ostream& operator<<(ostream& out, const DFA& a)
+ostream& operator <<(ostream& out, const DFA& a)
 {
     out << a.nrStari << " stari\n";
     out << "Starea initiala: " << a.si << '\n';
@@ -168,8 +332,8 @@ int main()
     cout << "\nAm transformat NFA-ul in DFA:\n";
     cout << adfa;
 
-    //adfa.minimisation();
+    adfa.minimisation();
     cout << "\nAm minimizat DFA-ul:\n";
-    //cout << adfa;
+    cout << adfa;
     return 0;
 }
